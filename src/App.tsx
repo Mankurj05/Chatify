@@ -23,8 +23,13 @@ type SearchUser = AuthenticatedUser & {
 
 type TabKey = 'chats' | 'private-chats' | 'requests' | 'profile';
 const DELETE_HOLD_MS = 700;
+const apiBaseUrl = import.meta.env.VITE_API_URL?.trim() ?? '';
 
 const emailStorageKey = 'chatify-email';
+
+function apiUrl(path: string) {
+  return apiBaseUrl ? new URL(path, apiBaseUrl).toString() : path;
+}
 
 function getStoredEmail() {
   return localStorage.getItem(emailStorageKey) ?? '';
@@ -346,7 +351,7 @@ export default function App() {
   );
 
   async function fetchMe() {
-    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    const response = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' });
 
     if (!response.ok) {
       return null;
@@ -357,7 +362,7 @@ export default function App() {
   }
 
   async function loadFriends() {
-    const response = await fetch('/api/friends', { credentials: 'include' });
+    const response = await fetch(apiUrl('/api/friends'), { credentials: 'include' });
 
     if (!response.ok) {
       throw new Error('Unable to load friends');
@@ -384,7 +389,7 @@ export default function App() {
   }
 
   async function loadRequests() {
-    const response = await fetch('/api/friends/requests', { credentials: 'include' });
+    const response = await fetch(apiUrl('/api/friends/requests'), { credentials: 'include' });
 
     if (!response.ok) {
       throw new Error('Unable to load requests');
@@ -402,7 +407,7 @@ export default function App() {
   }
 
   async function loadConversation(peerId: string) {
-    const response = await fetch(`/api/conversations/${encodeURIComponent(peerId)}`, { credentials: 'include' });
+    const response = await fetch(apiUrl(`/api/conversations/${encodeURIComponent(peerId)}`), { credentials: 'include' });
 
     if (!response.ok) {
       setMessages([]);
@@ -417,7 +422,7 @@ export default function App() {
     void (async () => {
       const me = await fetchMe();
 
-      const providers = await fetch('/api/auth/providers', { credentials: 'include' })
+      const providers = await fetch(apiUrl('/api/auth/providers'), { credentials: 'include' })
         .then((res) => (res.ok ? res.json() : null))
         .catch(() => null) as { supported?: string[] } | null;
 
@@ -449,7 +454,7 @@ export default function App() {
 
   function startGoogleAuth() {
     const returnTo = encodeURIComponent(window.location.origin);
-    window.location.href = `/api/auth/google/start?returnTo=${returnTo}`;
+    window.location.href = apiUrl(`/api/auth/google/start?returnTo=${returnTo}`);
   }
 
   useEffect(() => {
@@ -460,7 +465,7 @@ export default function App() {
     void loadFriends();
     void loadRequests();
 
-    const socket = io({ path: '/socket.io' });
+    const socket = io(apiBaseUrl || undefined, { path: '/socket.io', withCredentials: true });
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -572,7 +577,7 @@ export default function App() {
           ? { email: authEmail, password: authPassword }
           : { email: authEmail, password: authPassword, displayName: authDisplayName };
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -598,7 +603,7 @@ export default function App() {
   }
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined);
+    await fetch(apiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' }).catch(() => undefined);
     socketRef.current?.disconnect();
     setUser(null);
     setFriends([]);
@@ -621,7 +626,7 @@ export default function App() {
     setSearchBusy(true);
 
     try {
-      const response = await fetch(`/api/users/search?query=${encodeURIComponent(query)}`, { credentials: 'include' });
+      const response = await fetch(apiUrl(`/api/users/search?query=${encodeURIComponent(query)}`), { credentials: 'include' });
 
       if (!response.ok) {
         throw new Error('Search failed');
@@ -637,7 +642,7 @@ export default function App() {
   }
 
   async function sendFriendRequest(target: string) {
-    const response = await fetch('/api/friends/request', {
+    const response = await fetch(apiUrl('/api/friends/request'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -657,7 +662,7 @@ export default function App() {
   }
 
   async function respondToRequest(requestId: string, action: 'accept' | 'reject') {
-    const response = await fetch(`/api/friends/requests/${encodeURIComponent(requestId)}/respond`, {
+    const response = await fetch(apiUrl(`/api/friends/requests/${encodeURIComponent(requestId)}/respond`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -684,7 +689,7 @@ export default function App() {
     setPresenceBusy(true);
 
     try {
-      const response = await fetch('/api/profile/presence', {
+      const response = await fetch(apiUrl('/api/profile/presence'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -64,6 +64,20 @@ const port = Number(process.env.PORT ?? 3001);
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const googleRedirectUri = process.env.GOOGLE_REDIRECT_URI ?? `http://localhost:${port}/api/auth/google/callback`;
+const frontendOrigin = normalizeReturnOrigin(
+  process.env.FRONTEND_ORIGIN,
+  `http://localhost:${Number(process.env.VITE_PORT ?? 5173)}`
+);
+const sessionCookieOptions = {
+  sameSite:
+    process.env.SESSION_COOKIE_SAME_SITE === 'None' ||
+    (process.env.SESSION_COOKIE_SAME_SITE !== 'Lax' && process.env.NODE_ENV === 'production')
+      ? 'None'
+      : 'Lax',
+  secure:
+    process.env.SESSION_COOKIE_SECURE === 'true' ||
+    (process.env.SESSION_COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production'),
+} as const;
 const googleStateCookieName = 'chatify_google_oauth_state';
 const googleReturnCookieName = 'chatify_google_oauth_return';
 const app = express();
@@ -415,7 +429,7 @@ app.get('/api/auth/google/start', (request, response) => {
   }
 
   const state = randomUUID();
-  const fallbackOrigin = `http://localhost:${Number(process.env.VITE_PORT ?? 5173)}`;
+  const fallbackOrigin = frontendOrigin;
   const requestedReturn = String(request.query.returnTo ?? request.headers.origin ?? '');
   const returnOrigin = normalizeReturnOrigin(requestedReturn, fallbackOrigin);
 
@@ -425,7 +439,7 @@ app.get('/api/auth/google/start', (request, response) => {
 
 app.get('/api/auth/google/callback', async (request, response) => {
   if (!isGoogleAuthConfigured()) {
-    response.redirect('/?authError=google_not_configured');
+    response.redirect(`${frontendOrigin}/?authError=google_not_configured`);
     return;
   }
 
@@ -435,7 +449,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
   const cookieState = cookies.get(googleStateCookieName) ?? '';
   const returnOrigin = normalizeReturnOrigin(
     cookies.get(googleReturnCookieName),
-    `http://localhost:${Number(process.env.VITE_PORT ?? 5173)}`
+    frontendOrigin
   );
 
   response.setHeader('Set-Cookie', [clearGoogleStateCookie(), clearGoogleReturnCookie()]);
@@ -546,7 +560,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
     };
 
     await upsertSession(session);
-    response.setHeader('Set-Cookie', serializeSessionCookie(session.token));
+    response.setHeader('Set-Cookie', serializeSessionCookie(session.token, sessionCookieOptions));
     response.redirect(returnOrigin);
   } catch {
     response.redirect(`${returnOrigin}/?authError=google_auth_failed`);
@@ -606,7 +620,7 @@ app.post('/api/auth/register', async (request, response) => {
 
   await upsertSession(session);
 
-  response.setHeader('Set-Cookie', serializeSessionCookie(session.token));
+  response.setHeader('Set-Cookie', serializeSessionCookie(session.token, sessionCookieOptions));
   response.status(201).json({ user: toPublicUser(user) });
 });
 
@@ -636,7 +650,7 @@ app.post('/api/auth/login', async (request, response) => {
 
   await upsertSession(session);
 
-  response.setHeader('Set-Cookie', serializeSessionCookie(session.token));
+  response.setHeader('Set-Cookie', serializeSessionCookie(session.token, sessionCookieOptions));
   response.json({ user: toPublicUser(user) });
 });
 
@@ -647,7 +661,7 @@ app.post('/api/auth/logout', async (request, response) => {
     await deleteSession(token);
   }
 
-  response.setHeader('Set-Cookie', clearSessionCookie());
+  response.setHeader('Set-Cookie', clearSessionCookie(sessionCookieOptions));
   response.json({ ok: true });
 });
 

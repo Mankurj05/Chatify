@@ -3,6 +3,11 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 export const sessionCookieName = 'chatify_session';
 const sessionTtlMs = 1000 * 60 * 60 * 24 * 14;
 
+export interface SessionCookieOptions {
+  sameSite?: 'Lax' | 'None';
+  secure?: boolean;
+}
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -33,12 +38,22 @@ export function createSessionExpiry() {
   return Date.now() + sessionTtlMs;
 }
 
-export function serializeSessionCookie(token: string) {
-  return `${sessionCookieName}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(sessionTtlMs / 1000)}`;
+function buildSessionCookieAttributes(options: SessionCookieOptions = {}) {
+  const attributes = ['HttpOnly', 'Path=/', `SameSite=${options.sameSite ?? 'Lax'}`];
+
+  if (options.secure) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
 }
 
-export function clearSessionCookie() {
-  return `${sessionCookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
+export function serializeSessionCookie(token: string, options: SessionCookieOptions = {}) {
+  return `${sessionCookieName}=${token}; ${buildSessionCookieAttributes(options)}; Max-Age=${Math.floor(sessionTtlMs / 1000)}`;
+}
+
+export function clearSessionCookie(options: SessionCookieOptions = {}) {
+  return `${sessionCookieName}=; ${buildSessionCookieAttributes(options)}; Max-Age=0`;
 }
 
 export function parseCookieHeader(cookieHeader: string | undefined) {
